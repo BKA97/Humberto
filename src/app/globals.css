@@ -1,0 +1,101 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f8fa;
+  --surface: #ffffff;
+  --surface-muted: #f1f3f6;
+  --border: #e2e5ea;
+  --foreground: #14181f;
+  --foreground-muted: #5b6472;
+  --accent: #3452c4;
+
+  /* Attention magnitude scale — intensity, not sentiment (spec §34: never
+     imply "good"/"bad" via attention color). Five steps, Very Low -> Very High. */
+  --attn-1: #eef1f8;
+  --attn-2: #d7defa;
+  --attn-3: #b0bff5;
+  --attn-4: #7c8fe8;
+  --attn-5: #4a5cc9;
+
+  --positive: #0f8a5f;
+  --negative: #c23b3b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-accent: var(--accent);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0e1116;
+    --surface: #161a21;
+    --surface-muted: #1c212a;
+    --border: #2a303c;
+    --foreground: #e7eaee;
+    --foreground-muted: #8a93a3;
+    --accent: #7c93f5;
+
+    --attn-1: #1a1f2c;
+    --attn-2: #232c46;
+    --attn-3: #2f3d70;
+    --attn-4: #44579e;
+    --attn-5: #6274d6;
+
+    --positive: #3ec98a;
+    --negative: #e2685f;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border bg-(--color-surface) p-5;
+    border-color: var(--border);
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .nav-link {
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-(--color-foreground-muted) transition-colors;
+  }
+  .nav-link:hover {
+    @apply bg-(--color-surface-muted) text-(--color-foreground);
+  }
+  .nav-link-active {
+    @apply bg-(--color-surface-muted) text-(--color-foreground);
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50 disabled:pointer-events-none;
+    background: var(--accent);
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg border px-3.5 py-2 text-sm font-medium bg-(--color-surface) transition-colors disabled:opacity-50 disabled:pointer-events-none;
+    border-color: var(--border);
+  }
+  .input {
+    @apply w-full rounded-lg border bg-(--color-surface) px-3 py-2 text-sm outline-none;
+    border-color: var(--border);
+  }
+  .input:focus {
+    border-color: var(--accent);
+  }
+}
