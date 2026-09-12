@@ -90,8 +90,10 @@ export async function captureSocialAttentionSnapshots(opts: {
   ticker: string;
   companyName: string;
   newsEventId?: string | null;
+  /** See getSocialProviders — pass false during frequent intraday polling to skip rate-limit-sensitive providers like GDELT. */
+  includeLowFrequencyProviders?: boolean;
 }) {
-  const providers = getSocialProviders();
+  const providers = getSocialProviders({ includeLowFrequencyProviders: opts.includeLowFrequencyProviders });
   const rows = [];
   for (const provider of providers) {
     const result = await provider.getAttention({ ticker: opts.ticker, companyName: opts.companyName });

@@ -7,13 +7,23 @@ import {
   attentionSnapshots,
   articles,
 } from "./db/schema";
-import { desc, eq, gte } from "drizzle-orm";
+import { desc, eq, gte, type InferSelectModel } from "drizzle-orm";
 import { summarizeCoverage } from "./dedupe";
 import { attentionLevel } from "./attention";
 import type { AttentionPlatform } from "./providers/types";
 
+type NewsEventRow = InferSelectModel<typeof newsEvents>;
+
 export interface BriefCard {
-  event: { id: string; headline: string; summary: string; firstReportedAt: string | null };
+  event: {
+    id: string;
+    headline: string;
+    summary: string;
+    firstReportedAt: string | null;
+    discoveredAt: string;
+    mainstreamReachScore: number | null;
+    mainstreamReachRationale: string | null;
+  };
   company: { id: string; ticker: string; name: string };
   market: {
     price: number;
@@ -42,6 +52,47 @@ export async function getBriefCards(sinceHours = 20): Promise<BriefCard[]> {
   const since = new Date(Date.now() - sinceHours * 60 * 60 * 1000);
 
   const eventRows = await db.select().from(newsEvents).where(gte(newsEvents.discoveredAt, since)).orderBy(desc(newsEvents.discoveredAt));
+  const cards = await buildCardsForEvents(eventRows);
+
+  return cards.sort((a, b) => Math.abs(b.market?.percentChange ?? 0) - Math.abs(a.market?.percentChange ?? 0));
+}
+
+const ARCHIVE_PAGE_SIZE = 25;
+
+/**
+ * Every discovered event, tracked or not, paginated newest-first by when
+ * your app found it (`discoveredAt`) — the shelf-life gap getBriefCards
+ * leaves: Home/Morning Brief only ever show the last 20 hours, so anything
+ * you didn't track effectively vanished from the UI after that (the row
+ * itself was never deleted — see the append-only note on the schema — there
+ * was just nowhere left to browse it). This is that browse view. `days`
+ * narrows to events discovered in the last N days; omit it to page back
+ * through everything.
+ */
+export async function getArchiveCards(opts?: { page?: number; days?: number }): Promise<{ cards: BriefCard[]; hasNextPage: boolean }> {
+  const page = Math.max(1, opts?.page ?? 1);
+  const offset = (page - 1) * ARCHIVE_PAGE_SIZE;
+
+  const whereClause = opts?.days ? gte(newsEvents.discoveredAt, new Date(Date.now() - opts.days * 24 * 60 * 60 * 1000)) : undefined;
+
+  const eventRows = await db
+    .select()
+    .from(newsEvents)
+    .where(whereClause)
+    .orderBy(desc(newsEvents.discoveredAt))
+    .limit(ARCHIVE_PAGE_SIZE + 1) // one extra to know whether a next page exists, without a separate count query
+    .offset(offset);
+
+  const hasNextPage = eventRows.length > ARCHIVE_PAGE_SIZE;
+  const pageRows = eventRows.slice(0, ARCHIVE_PAGE_SIZE);
+  const cards = await buildCardsForEvents(pageRows);
+
+  // Chronological, not ranked by move size — this is a browse/archive view,
+  // not a "what matters most" view (see getBriefCards for that one).
+  return { cards, hasNextPage };
+}
+
+async function buildCardsForEvents(eventRows: NewsEventRow[]): Promise<BriefCard[]> {
   if (eventRows.length === 0) return [];
 
   const cards: BriefCard[] = [];
@@ -94,7 +145,7 @@ export async function getBriefCards(sinceHours = 20): Promise<BriefCard[]> {
       const financialValues = [latestByPlatform.NEWS_FINANCIAL].filter(Boolean) as NonNullable<
         (typeof latestByPlatform)[AttentionPlatform]
       >[];
-      const publicPlatforms: AttentionPlatform[] = ["NEWS_GENERAL", "X", "REDDIT", "TIKTOK", "INSTAGRAM", "YOUTUBE"];
+      const publicPlatforms: AttentionPlatform[] = ["NEWS_GENERAL", "X", "REDDIT", "TIKTOK", "INSTAGRAM", "YOUTUBE", "GDELT"];
       const publicValues = publicPlatforms.map((p) => latestByPlatform[p]).filter(Boolean) as NonNullable<
         (typeof latestByPlatform)[AttentionPlatform]
       >[];
@@ -114,6 +165,9 @@ export async function getBriefCards(sinceHours = 20): Promise<BriefCard[]> {
           headline: event.headline,
           summary: event.summary,
           firstReportedAt: firstReported,
+          discoveredAt: event.discoveredAt.toISOString(),
+          mainstreamReachScore: event.mainstreamReachScore,
+          mainstreamReachRationale: event.mainstreamReachRationale,
         },
         company,
         market: latestMarket
@@ -138,5 +192,5 @@ export async function getBriefCards(sinceHours = 20): Promise<BriefCard[]> {
     }
   }
 
-  return cards.sort((a, b) => Math.abs(b.market?.percentChange ?? 0) - Math.abs(a.market?.percentChange ?? 0));
+  return cards;
 }

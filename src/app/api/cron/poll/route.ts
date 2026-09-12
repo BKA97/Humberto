@@ -24,7 +24,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await ingestDiscoveryCycle({ sinceHours: 6 });
+    // thorough: false — keep frequent intraday polling cheap (one
+    // general-news request per tick, and skip rate-limit-sensitive
+    // providers like GDELT) — see the doc comment on ingestDiscoveryCycle.
+    const result = await ingestDiscoveryCycle({ sinceHours: 6, thorough: false });
     const alerts = await checkAndCreateAlerts();
     await db.insert(ingestionLogs).values({
       source: "cron",

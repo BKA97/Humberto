@@ -49,6 +49,7 @@ export const attentionPlatformEnum = pgEnum("attention_platform", [
   "TIKTOK",
   "INSTAGRAM",
   "YOUTUBE",
+  "GDELT",
 ]);
 
 export const positionStatusEnum = pgEnum("position_status", ["ACTIVE", "CLOSED"]);
@@ -93,6 +94,23 @@ export const newsEvents = pgTable(
     firstReportedAt: timestamp("first_reported_at"),
     discoveredAt: timestamp("discovered_at").notNull().defaultNow(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+
+    // LLM-based "mainstream reach" read (see src/lib/llm/storyAnalysis.ts).
+    // This is a DESCRIPTIVE classification — "how likely is a non-market
+    // person to have heard of this" — never a judgment about whether the
+    // story is a real problem or an overreaction; that stays the user's own
+    // thesis on each tracked position. Null means analysis hasn't run
+    // (ANTHROPIC_API_KEY not set, or the call failed) — the UI should treat
+    // that as "not available," not as a score of zero.
+    mainstreamReachScore: integer("mainstream_reach_score"),
+    mainstreamReachRationale: text("mainstream_reach_rationale"),
+    // Named people the LLM found in the story text — this is what lets a
+    // story surface a ticker via "Elon Musk" even when "Tesla" itself isn't
+    // named (see companyMatch.ts's usual limitation). Each entry's ticker
+    // (if any) is resolved against the real symbol directory, never trusted
+    // from the LLM directly — see analyzeStoryMainstreamReach's caller.
+    llmExtractedPeople: jsonb("llm_extracted_people"),
+    llmAnalyzedAt: timestamp("llm_analyzed_at"),
   },
   (t) => [index("news_events_first_reported_idx").on(t.firstReportedAt)]
 );

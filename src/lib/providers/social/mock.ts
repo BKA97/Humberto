@@ -19,6 +19,7 @@ const LABELS: Record<AttentionPlatform, { label: string; ecosystem: "FINANCIAL" 
   TIKTOK: { label: "relevant videos", ecosystem: "GENERAL_PUBLIC", base: 200 },
   INSTAGRAM: { label: "relevant posts", ecosystem: "GENERAL_PUBLIC", base: 150 },
   YOUTUBE: { label: "relevant videos", ecosystem: "GENERAL_PUBLIC", base: 30 },
+  GDELT: { label: "global news mentions", ecosystem: "GENERAL_PUBLIC", base: 40 },
 };
 
 export class MockSocialAttentionProvider implements SocialAttentionProvider {

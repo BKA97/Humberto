@@ -11,6 +11,7 @@ const PLATFORM_LABEL: Record<string, string> = {
   TIKTOK: "TikTok",
   INSTAGRAM: "Instagram",
   YOUTUBE: "YouTube",
+  GDELT: "Global news coverage",
 };
 
 function fmtTime(iso: string | null) {
@@ -55,6 +56,20 @@ export function NewsEventCard({ card }: { card: BriefCard }) {
         <div className="mb-1 text-xs font-medium tracking-wide text-(--color-foreground-muted) uppercase">What happened</div>
         <p className="text-sm">{card.event.summary}</p>
       </div>
+
+      {card.event.mainstreamReachScore != null && (
+        <div className="rounded-md bg-(--color-surface-muted) p-3">
+          <div className="mb-1 flex items-center gap-2 text-xs font-medium tracking-wide text-(--color-foreground-muted) uppercase">
+            Mainstream reach
+            <span className="rounded-full bg-(--color-accent) px-2 py-0.5 text-[10px] font-semibold text-white normal-case tracking-normal">
+              {card.event.mainstreamReachScore}/100
+            </span>
+          </div>
+          {card.event.mainstreamReachRationale && (
+            <p className="text-xs text-(--color-foreground-muted)">{card.event.mainstreamReachRationale}</p>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>

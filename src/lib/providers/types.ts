@@ -24,7 +24,8 @@ export type AttentionPlatform =
   | "REDDIT"
   | "TIKTOK"
   | "INSTAGRAM"
-  | "YOUTUBE";
+  | "YOUTUBE"
+  | "GDELT";
 
 export interface Provenance {
   source: string;

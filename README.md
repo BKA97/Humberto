@@ -93,26 +93,40 @@ If that all works, you're ready to deploy.
 Skip any of these and the app will simply show "Not available" for that
 data source instead of guessing — nothing breaks.
 
-### Finnhub — stock prices, general market news, and ticker discovery
+### Finnhub — stock prices and ticker discovery (not news)
 1. Go to [finnhub.io/register](https://finnhub.io/register), sign up, verify
    your email.
 2. Your API key is shown on your dashboard homepage after logging in.
 3. Copy it → this is `FINNHUB_API_KEY`.
 
-This one key does three things: stock prices, a general (untagged) news
-feed, and — because the app discovers tickers from the news rather than
-starting from a fixed list — the reference directory of company names it
-matches those untagged articles against. Skipping it means no live prices
-and much narrower discovery (only whatever Marketaux tags natively).
+This key powers live stock prices, plus the reference directory of company
+names/tickers used to match news articles to the companies they're about
+(see `src/lib/ingest/symbolDirectory.ts`). It is **not** used as a news
+source — see TheNewsAPI below for that. Skipping it means no live prices
+and much weaker discovery, since the app would have no reference list to
+match untagged article text against.
 
-### Marketaux — financial news, already tagged by company
-1. Go to [marketaux.com](https://www.marketaux.com), sign up.
-2. Find your API token on your account/dashboard page.
-3. Copy it → this is `MARKETAUX_API_KEY`.
+### TheNewsAPI — general/mainstream news (what actually drives discovery)
+1. Go to [thenewsapi.com/register](https://www.thenewsapi.com/register),
+   sign up (no card required).
+2. Your API token is shown on your account dashboard.
+3. Copy it → this is `THENEWSAPI_KEY`.
 
-Marketaux identifies which companies an article is about itself, so it's
-the more reliable of the two discovery sources — worth having even if you
-also set up Finnhub.
+This is the app's primary news source — deliberately general/mainstream
+rather than financial-press, so a story shows up here because it's actually
+in the news people read, not because a financial outlet wrote it up. The
+free tier is thin (historically ~100 requests/day, 3 articles per request),
+so the app is careful with it: each intraday poll costs exactly one
+request, and the more thorough per-ticker pass for open positions only
+runs once a day with the Morning Brief. See "Known V1 limitations" below.
+
+### Marketaux — financial news, already tagged by company (optional, off by default)
+Discovery runs on general/mainstream news now, not financial-press
+aggregators — see TheNewsAPI above. Marketaux's provider code
+(`src/lib/providers/news/marketaux.ts`) is still there and easy to re-enable
+in `src/lib/providers/news/index.ts` if you ever want financial-press
+coverage back alongside or instead of general news, but there's nothing to
+set up here for the default configuration — leave `MARKETAUX_API_KEY` blank.
 
 ### Reddit — social attention
 1. Log into Reddit, go to
@@ -131,6 +145,50 @@ also set up Finnhub.
    click **Enable**.
 3. Go to **APIs & Services → Credentials → Create Credentials → API key**.
 4. Copy it → this is `YOUTUBE_API_KEY`.
+
+### Claude (Anthropic) API — optional, paid usage, powers "mainstream reach" scoring
+This is what lets the app catch a story about an executive or public figure
+even when their company isn't named in the article text, and gives each
+new story a descriptive 0–100 "how likely is a non-financial-news reader
+to have heard about this" read (never a judgment about whether the stock's
+reaction makes sense — see `src/lib/llm/storyAnalysis.ts` and
+`SPEC-NOTES.md`).
+1. Go to [console.anthropic.com](https://console.anthropic.com) and sign
+   up. **This is a separate account from claude.ai** — your claude.ai
+   login doesn't carry over, and this one requires billing info (a card on
+   file), since usage is metered pay-as-you-go rather than a flat
+   subscription.
+2. Go to **API Keys**, click **Create Key**, copy it → this is
+   `ANTHROPIC_API_KEY`.
+3. Leave `ANTHROPIC_MODEL` blank to use the current default (a cheap/fast
+   model — see `DEFAULT_MODEL` in `src/lib/llm/storyAnalysis.ts`).
+
+Cost is small for personal use — each new story is one short request with
+no live web search involved (it reads off the headline/summary text
+already collected), so a realistic estimate is roughly **$1–10/month**
+depending on how many new stories the app discovers, and you can check
+actual usage any time on the Anthropic console's usage page. Leave this
+key blank to skip the feature entirely — discovery still works via
+keyword/name matching alone, just without the reach score or the
+executive/public-figure name resolution.
+
+### GDELT — optional, free, off by default
+[GDELT](https://www.gdeltproject.org) is a free, keyless, publicly-funded
+global news-coverage database. The app can use it as an extra signal for
+"how much the wider world is covering this," counting global mentions and
+distinct outlets — nothing else. There's nothing to sign up for; just set
+`ENABLE_GDELT="true"` to turn it on.
+
+It's off by default because it's a research/academic resource, not a
+commercial SLA'd API, and is more prone to rate limiting or the occasional
+malformed response than everything else this app talks to (handled
+defensively either way — see `src/lib/providers/social/gdelt.ts`). It also
+only runs once a day with the Morning Brief's more thorough pass, never
+during intraday polling, to keep well clear of that risk. **Note:** GDELT
+does publish a "tone" (sentiment) field alongside its coverage counts —
+this app deliberately never requests or uses it, in keeping with this
+project's core rule that nothing here characterizes a reaction as
+justified or not (see "What this app will never do" in `SPEC-NOTES.md`).
 
 ### X (Twitter) — optional, paid
 X's API now requires a paid developer plan (Basic tier, ~$200/month) to
@@ -179,12 +237,16 @@ same thing by clicking "Publish repository."
    | `APP_ACCESS_PASSWORD` | the password you want to log in with |
    | `SESSION_SECRET` | any long random string |
    | `CRON_SECRET` | any long random string (protects your cron endpoints) |
-   | `FINNHUB_API_KEY` | (optional) |
-   | `MARKETAUX_API_KEY` | (optional) |
+   | `FINNHUB_API_KEY` | (optional — prices + discovery directory) |
+   | `THENEWSAPI_KEY` | (optional — general news; discovery is much weaker without it) |
+   | `MARKETAUX_API_KEY` | (optional, off by default — see step 3) |
    | `REDDIT_CLIENT_ID` | (optional) |
    | `REDDIT_CLIENT_SECRET` | (optional) |
    | `REDDIT_USER_AGENT` | `market-reaction-lab/0.1 by yourredditusername` |
    | `YOUTUBE_API_KEY` | (optional) |
+   | `ANTHROPIC_API_KEY` | (optional — powers "mainstream reach" scoring; separate account from claude.ai) |
+   | `ANTHROPIC_MODEL` | (optional — leave unset for the default model) |
+   | `ENABLE_GDELT` | (optional — set to `true` to turn on the free GDELT signal) |
 
    Leave `DATABASE_URL` out for now — the next step adds it automatically.
 4. Click **Deploy**. It'll fail on the first try because there's no database
@@ -234,6 +296,16 @@ few minutes:
 3. Save it. The endpoint itself checks whether it's a trading day and does
    nothing on weekends/holidays, so it's safe to leave running all the time.
 
+**On TheNewsAPI's free-tier quota:** every 10–15 minutes across a 6.5-hour
+trading day is roughly 26–39 pings, and each intraday ping costs exactly
+one TheNewsAPI request (the app deliberately skips the more expensive
+per-ticker pass during intraday polling — see the comment on
+`ingestDiscoveryCycle` in `src/lib/ingest/news.ts`), plus a handful more
+from the once-daily Morning Brief. That comfortably fits inside a
+~100/day free-tier budget. If you ever see "TheNewsAPI daily request quota
+reached" in your ingestion logs, either widen the polling interval (e.g.
+every 20 minutes) or upgrade that account's plan.
+
 ---
 
 ## 8. Using it day to day
@@ -253,24 +325,57 @@ few minutes:
 Documented honestly rather than hidden:
 
 - **Discovery is news-first, not a fixed ticker list**: every cycle scans
-  broad, general market news and figures out which companies it mentions —
-  it doesn't start from a pre-chosen set of tickers. Marketaux tags
-  companies itself; Finnhub's general feed doesn't, so untagged articles are
-  matched against a cached ticker/name directory
-  (`src/lib/companyMatch.ts`, `src/lib/ingest/symbolDirectory.ts`) built
-  from Finnhub's symbol list — which means that directory, and therefore
-  full discovery coverage, needs `FINNHUB_API_KEY` set. Without it, you
-  still get whatever Marketaux natively tags (if `MARKETAUX_API_KEY` is
-  set) plus continuous coverage of anything you're actively tracking, just
-  with less reach into untagged general-news mentions. Anything with an
-  open position (or added to `SUPPLEMENTAL_TICKERS` in
+  broad, general/mainstream news (TheNewsAPI, not a financial-press
+  aggregator — see step 3 above) and figures out which companies it
+  mentions, rather than starting from a pre-chosen set of tickers. That
+  source doesn't tag companies itself, so every article gets matched
+  against a cached ticker/name directory (`src/lib/companyMatch.ts`,
+  `src/lib/ingest/symbolDirectory.ts`) built from Finnhub's symbol list —
+  which means that directory, and therefore discovery coverage overall,
+  needs `FINNHUB_API_KEY` set even though Finnhub isn't a news source here.
+  Anything with an open position (or added to `SUPPLEMENTAL_TICKERS` in
   `src/lib/ingest/watchlist.ts`) is guaranteed a price/attention snapshot
   every cycle even on a day with zero news about it — that list is a
   monitoring floor, not what drives discovery. The name-matching heuristic
   trades some precision for recall (see `src/lib/companyMatch.ts` for the
   cashtag/exchange/name-matching rules and its small stoplist of
   generic-word company names); it will occasionally miss an obscure company
-  or, rarely, mis-tag one.
+  or, rarely, mis-tag one. Without `ANTHROPIC_API_KEY` set, it also only
+  catches a person or brand when their associated public company is
+  actually named in the text — a story about a CEO or celebrity that never
+  mentions their company by name won't surface a ticker. With that key
+  set, see the next bullet.
+- **"Mainstream reach" scoring (`ANTHROPIC_API_KEY`)** runs once per
+  newly-discovered story, off the headline/summary text only — it does
+  **not** use live web search, so its 0–100 read reflects how the article
+  itself reads, not a verified check of what's actually trending right
+  now. It's also only as good as whatever people/company names it
+  extracts; those names are always re-checked against the real Finnhub
+  symbol directory before becoming a ticker (never trusted directly, to
+  avoid the model guessing a wrong or made-up ticker), so a name that
+  doesn't match anything in that directory closely enough simply won't
+  surface a ticker, same as today. And to repeat the project's core
+  design rule: this score is a descriptive "how likely is a
+  non-financial-news reader to have heard about this" estimate — it is
+  never a judgment about whether a stock's reaction is an overreaction or
+  makes sense. Only your own thesis field, and the purely descriptive
+  historical stats on the Research page, speak to that.
+- **GDELT (`ENABLE_GDELT`)** is a free academic resource, not a commercial
+  API — no uptime guarantee, and more prone to rate limiting or an
+  occasional malformed response than everything else here (handled
+  defensively). It only runs once a day with the Morning Brief, and its
+  counts are a rough proxy for global coverage volume, not a precise
+  measurement — treat them the same way as the app's other "estimate"
+  labeled figures.
+- **TheNewsAPI's free tier is thin** (historically ~100 requests/day, 3
+  articles per request), so any single cycle's view of "what's in the
+  news" is a shallow sample, not a firehose. Coverage builds up over the
+  day through repeated polling (see "Turn on intraday monitoring" above)
+  rather than any one call being comprehensive. If you outgrow this,
+  swapping in a higher-volume provider is a matter of adding one file
+  implementing the `NewsProvider` interface (see
+  `src/lib/providers/news/thenewsapi.ts` as a template) and wiring it into
+  `src/lib/providers/news/index.ts` — no other code needs to change.
 - **Event clustering** groups near-identical headlines across tickers as
   one story using text similarity, not true NLP entity resolution — see
   `src/lib/ingest/news.ts` and `src/lib/dedupe.ts`.
