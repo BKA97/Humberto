@@ -58,6 +58,12 @@ const MIN_NAME_LENGTH = 4;
 const GENERIC_NAME_STOPLIST = new Set([
   "gap", "target", "match", "block", "root", "chime", "core", "first",
   "old", "new", "sound", "east", "west", "here", "definity",
+  // "Post Holdings" strips to just "post" after suffix removal — an
+  // everyday verb/noun ("the company posted...", "in a recent post...")
+  // that has nothing to do with the cereal company. Confirmed false-
+  // positive: a Dubai Financial Market disclosure story with no relation
+  // to Post Holdings got tagged as POST purely from this word match.
+  "post",
 ]);
 
 export function buildMatchIndex(directory: DirectoryEntry[]): CompanyMatchIndex {

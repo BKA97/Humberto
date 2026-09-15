@@ -14,6 +14,16 @@ import { analyzeStoryMainstreamReach } from "../llm/storyAnalysis";
 
 type ArticleRow = InferSelectModel<typeof articlesTable>;
 
+// Some scraped sources (seen from TheNewsAPI's broader crawl) hand back a
+// "description" that's just the article's own URL restated — not a real
+// human-readable snippet, most likely a scraper fallback on their end when
+// no real summary was extracted. Showing that verbatim in "What happened"
+// reads as broken, so treat a bare-URL "summary" as no summary at all and
+// fall through to the synthetic placeholder text below.
+function looksLikeBareUrl(text: string): boolean {
+  return /^https?:\/\/\S+$/i.test(text.trim());
+}
+
 /**
  * News-first discovery (spec §4): tickers are discovered FROM the news, not
  * the other way around. Each cycle:
@@ -125,7 +135,10 @@ export async function ingestDiscoveryCycle(opts?: { sinceHours?: number; thoroug
           .insert(newsEvents)
           .values({
             headline: original.headline,
-            summary: original.summary ?? `News coverage detected for ${allTickers.join(", ")}.`,
+            summary:
+              original.summary && !looksLikeBareUrl(original.summary)
+                ? original.summary
+                : `News coverage detected for ${allTickers.join(", ")}.`,
             firstReportedAt: original.publishedAt ? new Date(original.publishedAt) : null,
           })
           .returning();
